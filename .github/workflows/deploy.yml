@@ -5,7 +5,6 @@ on:
   push:
     branches:
       - main
-
   pull_request:
     branches:
       - main
@@ -29,9 +28,42 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          pip install -r app/requirements.txt
-          pip install pytest
+          python -m pip install -r app/requirements.txt
+          python -m pip install pytest
 
       - name: Run Tests
+        run: python -m pytest -v tests/
+
+  build-and-push:
+    name: Build and Push Docker Image to ECR
+    needs: test
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::217631860087:role/GitHubActionsECRRole
+          aws-region: ap-south-1
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and Push Docker Image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: operisoft-images
+          IMAGE_TAG: ${{ github.sha }}
         run: |
-          python -m pytest -v tests/
+          docker build -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" .
+          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+
