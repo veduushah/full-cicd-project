@@ -80,4 +80,51 @@ jobs:
         run: |
           echo "Image pushed:"
           echo "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          deploy-to-eks:
+    name: Deploy Flask to Amazon EKS
+    needs: build-and-push
+    runs-on: ubuntu-latest
 
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::217631860087:role/GitHubActionsECRRole
+          aws-region: ap-south-1
+
+      - name: Configure kubectl
+        run: |
+          aws eks update-kubeconfig \
+            --region ap-south-1 \
+            --name flask-cicd-eks
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      - name: Deploy Application
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          helm upgrade --install flask-app ./helm/myapp \
+            --namespace default \
+            --set image.repository=217631860087.dkr.ecr.ap-south-1.amazonaws.com/operisoft-images \
+            --set-string image.tag="$IMAGE_TAG" \
+            --set replicaCount=1 \
+            --wait \
+            --timeout 5m
+
+      - name: Verify Deployment
+        run: |
+          kubectl rollout status deployment/flask-app-deployment \
+            --namespace default \
+            --timeout=180s
+
+          kubectl get pods --namespace default
+          kubectl get services --namespace default
