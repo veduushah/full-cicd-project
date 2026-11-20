@@ -40,7 +40,7 @@ jobs:
     needs: test
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
 
     permissions:
       id-token: write
@@ -66,11 +66,8 @@ jobs:
           ECR_REPOSITORY: operisoft-images
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          docker build \
-            -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" .
-
-          docker push \
-            "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          docker build -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" .
+          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
 
       - name: Print Image URI
         env:
@@ -80,10 +77,13 @@ jobs:
         run: |
           echo "Image pushed:"
           echo "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
-          deploy-to-eks:
+
+  deploy-to-eks:
     name: Deploy Flask to Amazon EKS
     needs: build-and-push
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     permissions:
       id-token: write
@@ -128,3 +128,4 @@ jobs:
 
           kubectl get pods --namespace default
           kubectl get services --namespace default
+
